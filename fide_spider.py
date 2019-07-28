@@ -1,4 +1,5 @@
 import scrapy
+from datetime import datetime
 
 class FIDE_ELO_Spider(scrapy.Spider):
     name = 'fide_elo_top100'
@@ -33,7 +34,7 @@ class FIDE_ELO_Spider(scrapy.Spider):
 
             yield response.follow(url=top_files_url, callback=self.parse_top_files_url, cb_kwargs=scraped_data)
 
-    def parse_top_files_url(self, response, **kwargs) -> None:
+    def parse_top_files_url(self, response, **kwargs):
         rankings = []
         for i, row in enumerate(response.xpath('//div[@id="main-col"]/*[@class="contentpaneopen"][2]/tr[2]/td/*[1]//tr')):
             if i == 0:
@@ -46,7 +47,7 @@ class FIDE_ELO_Spider(scrapy.Spider):
                 ranking_name = row.xpath('td[2]/a/text()').get().strip()
                 ranking_url = self.BASE_URL + '/' + row.xpath('td[2]/a/@href').get().strip()
                 rank = int(row.xpath('td[3]/text()').get().strip())
-                title = self.parse_title(row.xpath('td[4]/text()').get().strip())
+                title = self.parse_title(row.xpath('td[4]/text()').get(default='').strip())
                 elo = int(row.xpath('td[5]/text()').get().strip())
                 num_of_games = int(row.xpath('td[6]/text()').get().strip())
 
@@ -67,6 +68,30 @@ class FIDE_ELO_Spider(scrapy.Spider):
             'id_url' : id_url,
             'chess_statistics_url' : chess_statistics_url,
             'rankings' : rankings,
+        }
+
+        scraped_data_all = {**scraped_data, **scraped_data_new}
+
+        # yield scraped_data_all
+        yield response.follow(url=id_url, callback=self.parse_id_url, cb_kwargs=scraped_data_all)
+
+    def parse_id_url(self, response, **kwargs):
+
+        # yield scraped_data_all
+        full_report = []
+        for i, row in enumerate(response.xpath('//div[@id="main-col"]/*[@class="contentpaneopen"][2]/tr[2]/td/div/*[3]/tr[2]/td/*[1]//tr')):
+            if i == 0:
+                col_names = [x.lower() for x in row.xpath('th/text()').getall()]
+            else:
+                vals = [x for x in [x.strip() for x in row.xpath('td/text()').getall()] if x != ''] 
+                vals[1:] = [int(vals[i]) for i in range(1, len(vals))]
+                # d = datetime.strptime(vals[0], '%Y-%b')
+                # period_year, period_month = d.year, d.month
+                full_report.append(dict(zip(col_names, vals)))
+        
+        scraped_data = kwargs
+        scraped_data_new = {
+            'full_report' : full_report,
         }
 
         scraped_data_all = {**scraped_data, **scraped_data_new}
